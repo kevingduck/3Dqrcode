@@ -1,14 +1,18 @@
-import { Handler } from '@netlify/functions';
+import { Handler, HandlerContext } from '@netlify/functions';
+import { getStore } from '@netlify/blobs';
 
 const ANALYTICS_PASSWORD = process.env.ANALYTICS_PASSWORD || 'changeme123';
-const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
-const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 interface AnalyticsEvent {
   type: 'pageview' | 'download' | 'export' | 'session_end';
   timestamp: number;
   sessionId: string;
   data?: any;
+}
+
+interface AnalyticsStore {
+  events: AnalyticsEvent[];
+  lastUpdated: number;
 }
 
 interface AnalyticsSummary {
@@ -28,7 +32,7 @@ interface AnalyticsSummary {
   };
 }
 
-export const handler: Handler = async (event) => {
+export const handler: Handler = async (event, context: HandlerContext) => {
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -64,51 +68,42 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  if (!REDIS_URL || !REDIS_TOKEN) {
-    return {
-      statusCode: 500,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({ error: 'Redis not configured. See ANALYTICS_SETUP.md' })
-    };
-  }
-
   try {
-    // Get all events from Redis sorted set
-    const response = await fetch(`${REDIS_URL}/zrange/analytics_events/0/-1`, {
-      headers: {
-        Authorization: `Bearer ${REDIS_TOKEN}`,
-      },
+    // Get store with context
+    const store = getStore({
+      name: 'analytics',
+      siteID: context.site?.id || process.env.SITE_ID,
+      token: context.token || process.env.NETLIFY_TOKEN,
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch from Redis');
+    // Get analytics data
+    let data: AnalyticsStore;
+    try {
+      data = await store.get('data', { type: 'json' }) || { events: [], lastUpdated: 0 };
+    } catch {
+      data = { events: [], lastUpdated: 0 };
     }
-
-    const redisData = await response.json();
-    const events: AnalyticsEvent[] = (redisData.result || []).map((eventStr: string) => JSON.parse(eventStr));
 
     // Calculate summary statistics
     const summary: AnalyticsSummary = {
-      totalVisits: events.filter(e => e.type === 'pageview').length,
-      uniqueSessions: new Set(events.map(e => e.sessionId)).size,
-      totalDownloads: events.filter(e => e.type === 'export').length,
+      totalVisits: data.events.filter(e => e.type === 'pageview').length,
+      uniqueSessions: new Set(data.events.map(e => e.sessionId)).size,
+      totalDownloads: data.events.filter(e => e.type === 'export').length,
       avgTimeOnPage: 0,
-      recentActivity: events.slice(-50).reverse().map(e => ({
+      recentActivity: data.events.slice(-50).reverse().map(e => ({
         type: e.type,
         timestamp: e.timestamp,
         data: e.data
       })),
       downloadsByType: {
-        base: events.filter(e => e.type === 'export' && e.data?.exportType === 'base').length,
-        code: events.filter(e => e.type === 'export' && e.data?.exportType === 'code').length,
-        combined: events.filter(e => e.type === 'export' && e.data?.exportType === 'combined').length,
+        base: data.events.filter(e => e.type === 'export' && e.data?.exportType === 'base').length,
+        code: data.events.filter(e => e.type === 'export' && e.data?.exportType === 'code').length,
+        combined: data.events.filter(e => e.type === 'export' && e.data?.exportType === 'combined').length,
       }
     };
 
     // Calculate average time on page
-    const sessionEndEvents = events.filter(e => e.type === 'session_end' && e.data?.timeOnPage);
+    const sessionEndEvents = data.events.filter(e => e.type === 'session_end' && e.data?.timeOnPage);
     if (sessionEndEvents.length > 0) {
       const totalTime = sessionEndEvents.reduce((sum, e) => sum + (e.data?.timeOnPage || 0), 0);
       summary.avgTimeOnPage = Math.round(totalTime / sessionEndEvents.length);
@@ -129,7 +124,7 @@ export const handler: Handler = async (event) => {
       headers: {
         'Access-Control-Allow-Origin': '*',
       },
-      body: JSON.stringify({ error: 'Failed to retrieve analytics' })
+      body: JSON.stringify({ error: 'Failed to retrieve analytics', details: String(error) })
     };
   }
 };
