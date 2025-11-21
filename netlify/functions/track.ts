@@ -12,10 +12,8 @@ interface AnalyticsEvent {
   };
 }
 
-interface AnalyticsStore {
-  events: AnalyticsEvent[];
-  lastUpdated: number;
-}
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 export const handler: Handler = async (event) => {
   // Only allow POST requests
@@ -26,27 +24,37 @@ export const handler: Handler = async (event) => {
     };
   }
 
+  if (!REDIS_URL || !REDIS_TOKEN) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Redis not configured. See ANALYTICS_SETUP.md' })
+    };
+  }
+
   try {
     const analyticsEvent: AnalyticsEvent = JSON.parse(event.body || '{}');
 
-    // Get Netlify Blobs store
-    const { getStore } = await import('@netlify/blobs');
-    const store = getStore('analytics');
+    // Add event to Redis sorted set (sorted by timestamp)
+    const score = analyticsEvent.timestamp;
+    const member = JSON.stringify(analyticsEvent);
 
-    // Get existing data or initialize
-    let data: AnalyticsStore = await store.get('data', { type: 'json' }) || { events: [], lastUpdated: Date.now() };
+    // Use Upstash REST API
+    const addResponse = await fetch(`${REDIS_URL}/zadd/analytics_events/${score}/${encodeURIComponent(member)}`, {
+      headers: {
+        Authorization: `Bearer ${REDIS_TOKEN}`,
+      },
+    });
 
-    // Add new event
-    data.events.push(analyticsEvent);
-    data.lastUpdated = Date.now();
-
-    // Keep only last 10,000 events to stay within limits
-    if (data.events.length > 10000) {
-      data.events = data.events.slice(-10000);
+    if (!addResponse.ok) {
+      throw new Error('Failed to add event to Redis');
     }
 
-    // Save back to store
-    await store.setJSON('data', data);
+    // Keep only last 10,000 events
+    await fetch(`${REDIS_URL}/zremrangebyrank/analytics_events/0/-10001`, {
+      headers: {
+        Authorization: `Bearer ${REDIS_TOKEN}`,
+      },
+    });
 
     return {
       statusCode: 200,

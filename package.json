@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@netlify/blobs": "^8.1.0",
     "@netlify/functions": "^2.8.2",
     "@react-three/drei": "9.96.1",
     "@react-three/fiber": "8.15.12",
