@@ -69,12 +69,8 @@ export const handler: Handler = async (event, context: HandlerContext) => {
   }
 
   try {
-    // Get store with context
-    const store = getStore({
-      name: 'analytics',
-      siteID: context.site?.id || process.env.SITE_ID,
-      token: context.token || process.env.NETLIFY_TOKEN,
-    });
+    // Get store (auto-configured in Netlify environment)
+    const store = getStore('analytics');
 
     // Get analytics data
     let data: AnalyticsStore;

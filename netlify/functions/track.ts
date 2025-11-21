@@ -30,12 +30,8 @@ export const handler: Handler = async (event, context: HandlerContext) => {
   try {
     const analyticsEvent: AnalyticsEvent = JSON.parse(event.body || '{}');
 
-    // Get store with context (this works in deployed environment)
-    const store = getStore({
-      name: 'analytics',
-      siteID: context.site?.id || process.env.SITE_ID,
-      token: context.token || process.env.NETLIFY_TOKEN,
-    });
+    // Get store (auto-configured in Netlify environment)
+    const store = getStore('analytics');
 
     // Get existing data or initialize
     let data: AnalyticsStore;
