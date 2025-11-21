@@ -110,6 +110,20 @@ npm run build
 
 The built files will be in the `dist/` directory, ready for deployment.
 
+## Analytics Dashboard
+
+The app includes a simple, privacy-friendly analytics dashboard:
+
+- **Access**: Visit `/analytics` on your deployed site
+- **Password Protection**: Set `ANALYTICS_PASSWORD` environment variable in Netlify
+- **Metrics Tracked**:
+  - Total visits and unique sessions
+  - Average time on page
+  - STL downloads by type (base/code/combined)
+  - Recent activity feed
+
+The analytics use Netlify Functions and Netlify Blobs (both included in free tier) with no third-party tracking services.
+
 ## Tips for Best Results
 
 - **Scanning**: Use M or Q error correction for reliable scanning

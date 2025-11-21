@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { Download, Settings2, Printer, Type, Palette, Shapes, Wifi } from 'lucide-react';
 import QRModel from './components/QRModel';
 import { DEFAULT_CONFIG, QRConfig, AVAILABLE_FONTS } from './types';
+import { trackExport } from './utils/analytics';
 
 const App: React.FC = () => {
   const [config, setConfig] = useState<QRConfig>(DEFAULT_CONFIG);
@@ -274,6 +275,9 @@ const App: React.FC = () => {
 
           const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
           save(blob, filename);
+
+          // Track the export
+          trackExport(type);
       } catch (err) {
           console.error("Export failed", err);
           alert("Failed to export STL. Error: " + (err as Error).message);
