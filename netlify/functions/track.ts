@@ -30,10 +30,12 @@ export const handler: Handler = async (event, context: HandlerContext) => {
   try {
     const analyticsEvent: AnalyticsEvent = JSON.parse(event.body || '{}');
 
-    // Get store - try auto-config first, fall back to manual config
-    const store = process.env.SITE_ID && process.env.NETLIFY_TOKEN
-      ? getStore({ name: 'analytics', siteID: process.env.SITE_ID, token: process.env.NETLIFY_TOKEN })
-      : getStore('analytics');
+    // Get store - Netlify provides SITE_ID automatically, we just need NETLIFY_TOKEN
+    const store = getStore({
+      name: 'analytics',
+      siteID: process.env.SITE_ID,
+      token: process.env.NETLIFY_TOKEN
+    });
 
     // Get existing data or initialize
     let data: AnalyticsStore;
